@@ -4,12 +4,15 @@
 
 #include <entt/entt.hpp>
 #include <ecosystem/ModelRelated.hpp>
+#include <ecosystem/Camera.hpp>
 
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 
 int main(int, char **)
 {
+    entt::registry registry;
+
     Window window;
     if (!window.create("Sealblox", 1280, 720))
         return 1;
@@ -18,28 +21,26 @@ int main(int, char **)
     if (!renderer.init(window))
         return 1;
 
-    float view[16];
-    float proj[16];
+    ECS::Camera camera;
+    camera.setViewport(window.getWidth(), window.getHeight());
+    camera.yaw = bx::toRad(30.0f);
+    camera.pitch = bx::toRad(-20.0f);
 
-    bx::mtxLookAt(
-        view,
-        bx::Vec3(0.0f, 2.5f, -5.0f), // Camera position
-        bx::Vec3(0.0f, 0.0f, 0.0f)   // Look at the origin
-    );
+    ECS::CameraController cameraController(camera, window.getSDLWindow());
+    cameraController.focus({0.0f, 0.0f, 0.0f}, 10.0f, true);
+    float lastTime = window.getTime();
 
-    bx::mtxProj(
-        proj,
-        60.0f,
-        static_cast<float>(window.getWidth()) /
-            static_cast<float>(window.getHeight()),
-        0.1f,
-        100.0f,
-        bgfx::getCaps()->homogeneousDepth);
-
-    bgfx::setViewTransform(0, view, proj);
+    window.setEventCallback([&](const SDL_Event &e)
+                            { cameraController.handleEvent(e); });
 
     while (window.pollEvents())
     {
+        const float now = window.getTime();
+        const float dt = bx::min(now - lastTime, 0.1f);
+
+        cameraController.update(dt, std::optional<bx::Vec3>(), std::optional<bx::Vec3>());
+
+        bgfx::setViewTransform(0, camera.getView(), camera.getProjection());
         renderer.beginFrame();
 
         if (window.wasResized())
